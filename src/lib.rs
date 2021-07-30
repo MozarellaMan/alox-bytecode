@@ -3,6 +3,7 @@ use vm::Vm;
 
 pub mod chunk;
 pub mod compiler;
+pub mod object;
 pub mod opcodes;
 pub mod repl;
 pub mod scanner;

@@ -1,4 +1,4 @@
-use crate::{chunk::Chunk, compiler::Parser, opcodes::Op, value::Value};
+use crate::{chunk::Chunk, compiler::Parser, object::Object, opcodes::Op, value::Value};
 
 const STACK_UNDERFLOW: &str = "Stack underflow!";
 
@@ -76,7 +76,31 @@ impl Vm {
                         return Err(InterpreterError::RuntimeError);
                     }
                 }
-                Op::Add => binary_op!(self, +, Number),
+                Op::Add => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    match (&b, &a) {
+                        (Value::Obj(b), Value::Obj(a)) => {
+                            if let (Object::String(a), Object::String(b)) = (b, a) {
+                                let first = b.clone().0;
+                                let second = &a.0;
+                                self.push(Value::from_string(first + second))
+                            } else {
+                                self.push(Value::Obj(a.clone()));
+                                self.push(Value::Obj(b.clone()));
+                                self.runtime_error("Operands must be two strings.");
+                                return Err(InterpreterError::RuntimeError);
+                            }
+                        }
+                        (Value::Number(b), Value::Number(a)) => self.push(Value::Number(a + b)),
+                        _ => {
+                            self.push(a);
+                            self.push(b);
+                            self.runtime_error("Operands must be two numbers.");
+                            return Err(InterpreterError::RuntimeError);
+                        }
+                    }
+                }
                 Op::Subract => binary_op!(self, -, Number),
                 Op::Multiply => binary_op!(self, *, Number),
                 Op::Divide => binary_op!(self, /, Number),

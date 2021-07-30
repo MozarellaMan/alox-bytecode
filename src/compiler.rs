@@ -177,7 +177,7 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
                 ParseRule::new(None, Some(|this| this.binary()), Precedence::Comparison)
             }
             TokenKind::Identifier => ParseRule::none(),
-            TokenKind::String => ParseRule::none(),
+            TokenKind::String => ParseRule::new(Some(|this| this.string()), None, Precedence::None),
             TokenKind::Number => ParseRule::new(Some(|this| this.number()), None, Precedence::None),
             TokenKind::And => ParseRule::none(),
             TokenKind::Class => ParseRule::none(),
@@ -207,6 +207,14 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
             TokenKind::Nil => self.emit_byte(Op::Nil.u8()),
             _ => unreachable!(),
         }
+    }
+
+    fn string(&mut self) {
+        let string = self.previous_token();
+        let string_len = string.lexeme.len();
+        let string = &string.lexeme[1..string_len - 1];
+        let val = Value::from_str(string);
+        self.emit_constant(val);
     }
 
     fn consume(&mut self, token_kind: TokenKind, _error_msg: &str) {
