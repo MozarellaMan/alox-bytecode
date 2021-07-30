@@ -1,13 +1,20 @@
-use crate::{chunk::{Chunk, Value}, compiler::Parser, opcodes::Op};
+use crate::{chunk::Chunk, compiler::Parser, opcodes::Op, value::Value};
 
 const STACK_UNDERFLOW: &str = "Stack underflow!";
 
 macro_rules! binary_op {
-    ($self:ident,$operator:tt) => {
+    ($self:ident,$operator:tt, $variant:tt) => {
         {
             let b = $self.pop();
             let a = $self.pop();
-            $self.push(a $operator b);
+            if let (Value::Number(n1), Value::Number(n2)) = (&a, &b) {
+                $self.push(Value::$variant(n1 $operator n2));
+            } else {
+                $self.push(a);
+                $self.push(b);
+                $self.runtime_error("Operands must be numbers.");
+                return Err(InterpreterError::RuntimeError)
+            }
         }
     };
 }
@@ -29,8 +36,8 @@ impl Vm {
     }
 
     pub fn interpret(&mut self, source: &str) -> InterpreterResult {
-        if let Err(_) = Parser::compile(source, &mut self.chunk) {
-            return Err(InterpreterError::CompileError)
+        if Parser::compile(source, &mut self.chunk).is_err() {
+            return Err(InterpreterError::CompileError);
         }
         self.run()
     }
@@ -40,7 +47,7 @@ impl Vm {
     }
 
     fn run(&mut self) -> InterpreterResult {
-        Ok(loop {
+        loop {
             if self.ip >= self.chunk.code.len() {
                 break;
             }
@@ -59,17 +66,51 @@ impl Vm {
                     let constant = self.read_constant(index);
                     self.push(constant);
                 }
-                Op::Negate => *self.peek() = -*self.peek(),
-                Op::Add => binary_op!(self, +),
-                Op::Subract => binary_op!(self, -),
-                Op::Multiply => binary_op!(self, *),
-                Op::Divide => binary_op!(self, /)
+                Op::Negate => {
+                    let val = self.pop();
+                    if let Value::Number(n) = val {
+                        self.push(Value::Number(-n));
+                    } else {
+                        self.push(val);
+                        self.runtime_error("Operand must be a number.");
+                        return Err(InterpreterError::RuntimeError);
+                    }
+                }
+                Op::Add => binary_op!(self, +, Number),
+                Op::Subract => binary_op!(self, -, Number),
+                Op::Multiply => binary_op!(self, *, Number),
+                Op::Divide => binary_op!(self, /, Number),
+                Op::Nil => self.push(Value::Nil),
+                Op::True => self.push(Value::Bool(true)),
+                Op::False => self.push(Value::Bool(false)),
+                Op::Not => {
+                    let val = self.pop();
+                    self.push(Value::Bool(Vm::is_falsey(val)))
+                }
+                Op::Equal => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    self.push(Value::Bool(a == b))
+                }
+                Op::Greater => binary_op!(self, >, Bool),
+                Op::Less => binary_op!(self, <, Bool),
             }
-        })
+        }
+        Ok(())
     }
 
-    fn peek(&mut self) -> &mut Value {
+    fn peek(&self) -> &Value {
+        self.stack.last().expect(STACK_UNDERFLOW)
+    }
+
+    fn peek_mut(&mut self) -> &mut Value {
         self.stack.last_mut().expect(STACK_UNDERFLOW)
+    }
+
+    fn peek_by(&self, distance: usize) -> &Value {
+        self.stack
+            .get(self.stack.len() - 1 - distance)
+            .expect(STACK_UNDERFLOW)
     }
 
     #[inline]
@@ -89,7 +130,21 @@ impl Vm {
     }
 
     fn read_constant(&self, index: u8) -> Value {
-        self.chunk.constants[index as usize]
+        self.chunk.constants[index as usize].clone()
+    }
+
+    fn runtime_error(&self, message: &str) {
+        eprintln!("{}", message);
+        let line = self.chunk.lines[self.ip - 1];
+        eprintln!("[line {}] in script", line)
+    }
+
+    fn is_falsey(val: Value) -> bool {
+        match val {
+            Value::Nil => true,
+            Value::Bool(b) => !b,
+            _ => false,
+        }
     }
 }
 

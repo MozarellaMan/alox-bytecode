@@ -2,16 +2,22 @@
 pub struct Token<'source> {
     pub kind: TokenKind,
     pub line: usize,
-    pub lexeme: &'source str
+    pub lexeme: &'source str,
 }
 
 impl<'source> Token<'source> {
-    pub fn make(source: &'source str, kind: TokenKind, start: usize, length: usize, line: usize) -> Self {
+    pub fn make(
+        source: &'source str,
+        kind: TokenKind,
+        start: usize,
+        length: usize,
+        line: usize,
+    ) -> Self {
         let end = start + length;
         Self {
             kind,
             line,
-            lexeme: &source[start..end]
+            lexeme: &source[start..end],
         }
     }
 
@@ -19,7 +25,7 @@ impl<'source> Token<'source> {
         Self {
             kind: TokenKind::Error,
             line,
-            lexeme: msg
+            lexeme: msg,
         }
     }
 }
@@ -73,5 +79,5 @@ pub enum TokenKind {
     Print,
 
     Eof,
-    Error
+    Error,
 }

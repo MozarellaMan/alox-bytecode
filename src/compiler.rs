@@ -1,10 +1,11 @@
 use std::{convert::TryInto, u8};
 
 use crate::{
-    chunk::{Chunk, Value},
+    chunk::Chunk,
     opcodes::Op,
     scanner::Scanner,
     token::{Token, TokenKind},
+    value::Value,
 };
 
 pub type CompilationResult = Result<(), CompilationError>;
@@ -77,7 +78,7 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
 
     fn number(&mut self) {
         let value = self.previous_token().lexeme.parse::<f64>().unwrap();
-        self.emit_constant(value);
+        self.emit_constant(Value::Number(value));
     }
 
     fn unary(&mut self) {
@@ -89,6 +90,7 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
         // emit op instruction
         match op_kind {
             TokenKind::Minus => self.emit_byte(Op::Negate.u8()),
+            TokenKind::Bang => self.emit_byte(Op::Not.u8()),
             _ => unreachable!(),
         }
     }
@@ -103,6 +105,12 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
             TokenKind::Minus => self.emit_byte(Op::Subract.u8()),
             TokenKind::Star => self.emit_byte(Op::Multiply.u8()),
             TokenKind::Slash => self.emit_byte(Op::Divide.u8()),
+            TokenKind::BangEqual => self.emit_bytes(Op::Equal.u8(), Op::Not.u8()),
+            TokenKind::EqualEqual => self.emit_byte(Op::Equal.u8()),
+            TokenKind::Greater => self.emit_byte(Op::Greater.u8()),
+            TokenKind::GreaterEqual => self.emit_bytes(Op::Less.u8(), Op::Not.u8()),
+            TokenKind::Less => self.emit_byte(Op::Less.u8()),
+            TokenKind::LessEqual => self.emit_bytes(Op::Greater.u8(), Op::Not.u8()),
             _ => unreachable!(),
         }
     }
@@ -148,30 +156,42 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
                 ParseRule::new(None, Some(|this| this.binary()), Precedence::Factor)
             }
             TokenKind::Star => ParseRule::new(None, Some(|this| this.binary()), Precedence::Factor),
-            TokenKind::Bang => ParseRule::none(),
-            TokenKind::BangEqual => ParseRule::none(),
+            TokenKind::Bang => ParseRule::new(Some(|this| this.unary()), None, Precedence::None),
+            TokenKind::BangEqual => {
+                ParseRule::new(None, Some(|this| this.binary()), Precedence::Equality)
+            }
             TokenKind::Equal => ParseRule::none(),
-            TokenKind::EqualEqual => ParseRule::none(),
-            TokenKind::Greater => ParseRule::none(),
-            TokenKind::GreaterEqual => ParseRule::none(),
-            TokenKind::Less => ParseRule::none(),
-            TokenKind::LessEqual => ParseRule::none(),
+            TokenKind::EqualEqual => {
+                ParseRule::new(None, Some(|this| this.binary()), Precedence::Equality)
+            }
+            TokenKind::Greater => {
+                ParseRule::new(None, Some(|this| this.binary()), Precedence::Comparison)
+            }
+            TokenKind::GreaterEqual => {
+                ParseRule::new(None, Some(|this| this.binary()), Precedence::Comparison)
+            }
+            TokenKind::Less => {
+                ParseRule::new(None, Some(|this| this.binary()), Precedence::Comparison)
+            }
+            TokenKind::LessEqual => {
+                ParseRule::new(None, Some(|this| this.binary()), Precedence::Comparison)
+            }
             TokenKind::Identifier => ParseRule::none(),
             TokenKind::String => ParseRule::none(),
             TokenKind::Number => ParseRule::new(Some(|this| this.number()), None, Precedence::None),
             TokenKind::And => ParseRule::none(),
             TokenKind::Class => ParseRule::none(),
             TokenKind::Else => ParseRule::none(),
-            TokenKind::False => ParseRule::none(),
+            TokenKind::False => ParseRule::new(Some(|this| this.literal()), None, Precedence::None),
             TokenKind::Fun => ParseRule::none(),
             TokenKind::For => ParseRule::none(),
             TokenKind::If => ParseRule::none(),
-            TokenKind::Nil => ParseRule::none(),
+            TokenKind::Nil => ParseRule::new(Some(|this| this.literal()), None, Precedence::None),
             TokenKind::Or => ParseRule::none(),
             TokenKind::Return => ParseRule::none(),
             TokenKind::Super => ParseRule::none(),
             TokenKind::This => ParseRule::none(),
-            TokenKind::True => ParseRule::none(),
+            TokenKind::True => ParseRule::new(Some(|this| this.literal()), None, Precedence::None),
             TokenKind::Var => ParseRule::none(),
             TokenKind::While => ParseRule::none(),
             TokenKind::Print => ParseRule::none(),
@@ -180,7 +200,16 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
         }
     }
 
-    fn consume(&mut self, token_kind: TokenKind, error_msg: &str) {
+    fn literal(&mut self) {
+        match self.previous_token().kind {
+            TokenKind::False => self.emit_byte(Op::False.u8()),
+            TokenKind::True => self.emit_byte(Op::True.u8()),
+            TokenKind::Nil => self.emit_byte(Op::Nil.u8()),
+            _ => unreachable!(),
+        }
+    }
+
+    fn consume(&mut self, token_kind: TokenKind, _error_msg: &str) {
         if let Some(token) = self.current.as_ref() {
             if token.kind == token_kind {
                 self.advance();
@@ -251,7 +280,6 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
         } else {
             eprintln!("Parser error.");
         }
-
     }
 }
 

@@ -127,7 +127,12 @@ impl<'source> Scanner<'source> {
     }
 
     /// Checks the next token, if matches makes the token kind specified by opt1, op2 otherwise
-    fn match_next_token(&mut self, expected: u8, opt1: TokenKind, opt2: TokenKind) -> Token<'source> {
+    fn match_next_token(
+        &mut self,
+        expected: u8,
+        opt1: TokenKind,
+        opt2: TokenKind,
+    ) -> Token<'source> {
         if self.match_next(expected) {
             self.make_token(opt1)
         } else {

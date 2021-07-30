@@ -1,4 +1,4 @@
-use rustyline::{Editor, error::ReadlineError};
+use rustyline::{error::ReadlineError, Editor};
 
 use crate::run_script;
 

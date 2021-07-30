@@ -1,10 +1,10 @@
-use crate::opcodes::Op;
+use crate::{opcodes::Op, value::Value};
 use std::usize;
-pub type Value = f64;
+
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,
-    lines: Vec<usize>,
+    pub lines: Vec<usize>,
 }
 
 impl Chunk {
@@ -69,14 +69,14 @@ impl Chunk {
             Op::ConstantLong => self.print_constant_long_instruction(opcode, offset),
             _default => {
                 println!("{:?}", opcode);
-                return offset + 1;
+                offset + 1
             }
         }
     }
 
     fn print_constant_instruction(&self, op: Op, offset: usize) -> usize {
         let constant = self.code[offset + 1];
-        let value = self.constants[constant as usize];
+        let value = &self.constants[constant as usize];
         println!("{:?} \t{} '{}'", op, offset, value);
         offset + 2
     }
@@ -90,7 +90,7 @@ impl Chunk {
         num.copy_from_slice(constant);
         padding.fill(0);
         let constant = u32::from_le_bytes(index);
-        let value = self.constants[constant as usize];
+        let value = &self.constants[constant as usize];
 
         println!("{:?} \t{} '{}'", op, offset, value);
         offset + 4

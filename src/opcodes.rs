@@ -1,21 +1,27 @@
 use std::convert::{TryFrom, TryInto};
 
-
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Op {
     Return = 0,
     Constant,
     ConstantLong,
+    Nil,
+    True,
+    False,
+    Equal,
+    Greater,
+    Less,
     Add,
     Subract,
     Multiply,
     Divide,
-    Negate
+    Not,
+    Negate,
 }
 
 impl Op {
-    pub fn u8(self) -> u8 {
+    pub const fn u8(self) -> u8 {
         self as u8
     }
 

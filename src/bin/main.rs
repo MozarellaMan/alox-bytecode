@@ -1,14 +1,14 @@
 use std::fs;
 
-use alox_bytecode::{chunk::Chunk, opcodes::Op, repl::run_prompt, vm::Vm};
+use alox_bytecode::{chunk::Chunk, opcodes::Op, repl::run_prompt, value::Value, vm::Vm};
 use clap::{App, Arg, SubCommand};
 
 fn main() {
     let mut chunk = Chunk::init();
-    chunk.write_constant(1.2, 123);
-    chunk.write_constant(3.4, 123);
+    chunk.write_constant(Value::Number(1.2), 123);
+    chunk.write_constant(Value::Number(3.4), 123);
     chunk.write(Op::Add.u8(), 123);
-    chunk.write_constant(5.6, 123);
+    chunk.write_constant(Value::Number(5.6), 123);
     chunk.write(Op::Divide.u8(), 123);
     chunk.write(Op::Negate.u8(), 123);
     chunk.write(Op::Return.u8(), 123);
@@ -40,7 +40,7 @@ fn main() {
         run_prompt()
     }
     if let Some(filepath) = matches.value_of("script") {
-        let file =  fs::read_to_string(filepath);
+        let file = fs::read_to_string(filepath);
         match file {
             Ok(contents) => alox_bytecode::run_script(&contents),
             Err(err) => println!("Can't open file: {:?}", err),
