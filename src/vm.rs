@@ -1,4 +1,4 @@
-use crate::{chunk::Chunk, compiler::Parser, object::Object, opcodes::Op, value::Value};
+use crate::{chunk::Chunk, interner::Interner, object::Object, opcodes::Op, value::Value};
 
 const STACK_UNDERFLOW: &str = "Stack underflow!";
 
@@ -20,33 +20,28 @@ macro_rules! binary_op {
 }
 
 pub type InterpreterResult = Result<(), InterpreterError>;
-pub struct Vm {
+pub struct Vm<'a> {
     chunk: Chunk,
     ip: usize,
     stack: Vec<Value>,
+    interner: Interner<'a>,
 }
 
-impl Vm {
-    pub fn new(chunk: Chunk) -> Self {
+impl<'vm> Vm<'vm> {
+    pub fn new(chunk: Chunk, interner: Interner<'vm>) -> Self {
         Vm {
             chunk,
             ip: 0,
             stack: Vec::new(),
+            interner,
         }
-    }
-
-    pub fn interpret(&mut self, source: &str) -> InterpreterResult {
-        if Parser::compile(source, &mut self.chunk).is_err() {
-            return Err(InterpreterError::CompileError);
-        }
-        self.run()
     }
 
     pub fn interpret_current_chunk(&mut self) -> InterpreterResult {
         self.run()
     }
 
-    fn run(&mut self) -> InterpreterResult {
+    pub fn run(&mut self) -> InterpreterResult {
         loop {
             if self.ip >= self.chunk.code.len() {
                 break;
@@ -58,9 +53,12 @@ impl Vm {
             #[cfg(debug_assertions)]
             self.chunk.disassemble_instruction(self.ip - 1);
             match instruction {
-                Op::Return => {
-                    println!("{}", self.pop())
-                }
+                Op::Return => match self.pop() {
+                    Value::Obj(obj) => match obj {
+                        Object::String(idx) => println!("{}", self.interner.lookup(idx.0)),
+                    },
+                    _other => println!("{}", _other),
+                },
                 Op::Constant | Op::ConstantLong => {
                     let index = self.next_byte();
                     let constant = self.read_constant(index);
@@ -82,9 +80,14 @@ impl Vm {
                     match (&b, &a) {
                         (Value::Obj(b), Value::Obj(a)) => {
                             if let (Object::String(a), Object::String(b)) = (b, a) {
-                                let first = b.clone().0;
-                                let second = &a.0;
-                                self.push(Value::from_string(first + second))
+                                let first = {
+                                    let str = self.interner.lookup(b.0);
+                                    String::from(str)
+                                };
+                                let second = self.interner.lookup(a.0);
+                                let concatenated = first + second;
+                                let concatenated = self.interner.intern(&concatenated);
+                                self.push(Value::from_str_index(concatenated));
                             } else {
                                 self.push(Value::Obj(a.clone()));
                                 self.push(Value::Obj(b.clone()));

@@ -2,6 +2,7 @@ use std::{convert::TryInto, u8};
 
 use crate::{
     chunk::Chunk,
+    interner::Interner,
     opcodes::Op,
     scanner::Scanner,
     token::{Token, TokenKind},
@@ -9,18 +10,22 @@ use crate::{
 };
 
 pub type CompilationResult = Result<(), CompilationError>;
-
-pub struct Parser<'source, 'chunk> {
+pub struct Parser<'source, 'chunk, 'interner> {
     scanner: Scanner<'source>,
     current: Option<Token<'source>>,
     previous: Option<Token<'source>>,
     current_chunk: &'chunk mut Chunk,
+    interner: &'chunk mut Interner<'interner>,
     had_error: bool,
     panic_mode: bool,
 }
 
-impl<'source, 'chunk> Parser<'source, 'chunk> {
-    fn new(scanner: Scanner<'source>, chunk: &'chunk mut Chunk) -> Self {
+impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
+    pub fn new(
+        scanner: Scanner<'source>,
+        chunk: &'chunk mut Chunk,
+        interner: &'chunk mut Interner<'interner>,
+    ) -> Self {
         Self {
             scanner,
             current: None,
@@ -28,19 +33,18 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
             had_error: false,
             panic_mode: false,
             current_chunk: chunk,
+            interner,
         }
     }
 
-    pub fn compile(source: &'source str, chunk: &mut Chunk) -> CompilationResult {
-        let scanner = Scanner::new(source);
-        let mut parser = Parser::new(scanner, chunk);
-        parser.advance();
-        parser.expression();
-        parser.consume(TokenKind::Eof, "Expected end of expression.");
-        if parser.had_error {
+    pub fn compile(&mut self) -> CompilationResult {
+        self.advance();
+        self.expression();
+        self.consume(TokenKind::Eof, "Expected end of expression.");
+        if self.had_error {
             Err(CompilationError::Error)
         } else {
-            parser.end_compiler();
+            self.end_compiler();
             Ok(())
         }
     }
@@ -210,10 +214,26 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
     }
 
     fn string(&mut self) {
-        let string = self.previous_token();
-        let string_len = string.lexeme.len();
-        let string = &string.lexeme[1..string_len - 1];
-        let val = Value::from_str(string);
+        let string = {
+            let string = self.previous_token();
+            let string_len = string.lexeme.len();
+            let string = &string.lexeme[1..string_len - 1];
+            if self.interner.exists(string) {
+                Ok(string)
+            } else {
+                Err(String::from(string))
+            }
+        };
+        let val = match string {
+            Ok(existing) => {
+                let idx = self.interner.get_existing(existing);
+                Value::from_str_index(idx)
+            }
+            Err(new_string) => {
+                let idx = self.interner.intern(&new_string);
+                Value::from_str_index(idx)
+            }
+        };
         self.emit_constant(val);
     }
 

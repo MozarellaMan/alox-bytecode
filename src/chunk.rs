@@ -1,6 +1,6 @@
 use crate::{opcodes::Op, value::Value};
 use std::usize;
-
+#[derive(Clone)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,

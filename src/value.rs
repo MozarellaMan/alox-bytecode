@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use crate::object::Object;
+use crate::{
+    interner::Interner,
+    object::{AloxString, Object},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -10,28 +13,31 @@ pub enum Value {
     Nil,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct AloxString(pub String);
-
 impl Value {
-    pub fn from_str(contents: &str) -> Self {
-        Self::Obj(Object::from_str(contents))
+    pub fn from_str_index(idx: u32) -> Self {
+        Self::Obj(Object::String(AloxString(idx)))
     }
 
-    pub fn from_string(string: String) -> Self {
-        Self::Obj(Object::from_string(string))
+    pub fn from_str(contents: &str, interner: &mut Interner) -> Self {
+        Self::Obj(Object::from_str(contents, interner))
+    }
+
+    pub fn from_string(string: String, interner: &mut Interner) -> Self {
+        Self::Obj(Object::from_str(&string, interner))
     }
 
     pub fn as_bool(&self) -> Option<bool> {
-        match *self {
-            Self::Bool(bool) => Some(bool),
-            _ => None,
+        if let Self::Bool(bool) = *self {
+            Some(bool)
+        } else {
+            None
         }
     }
     pub fn as_number(&self) -> Option<f64> {
-        match *self {
-            Self::Number(num) => Some(num),
-            _ => None,
+        if let Self::Number(num) = *self {
+            Some(num)
+        } else {
+            None
         }
     }
 }

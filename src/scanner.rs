@@ -19,11 +19,11 @@ impl<'source> Scanner<'source> {
 
     pub fn scan(&mut self) {
         loop {
-            let mut line = 0;
+            let line = 0;
             let token = self.scan_token();
             if token.line != line || token.line == 0 {
                 print!("{}", token.line);
-                line = token.line;
+                // line = token.line;
             } else {
                 print!("   | ");
             }

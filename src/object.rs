@@ -1,19 +1,22 @@
 use std::fmt::Display;
 
-use crate::value::AloxString;
+use crate::interner::Interner;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
     String(AloxString),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub struct AloxString(pub u32);
+
 impl Object {
-    pub fn from_str(contents: &str) -> Self {
-        Self::String(AloxString(String::from(contents)))
+    pub fn from_str(contents: &str, interner: &mut Interner) -> Self {
+        Self::String(AloxString(interner.intern(contents)))
     }
 
-    pub fn from_string(string: String) -> Self {
-        Self::String(AloxString(string))
+    pub fn from_string(string: String, interner: &mut Interner) -> Self {
+        Self::String(AloxString(interner.intern(&string)))
     }
 }
 
