@@ -51,7 +51,7 @@ impl<'vm> Vm<'vm> {
             let next_byte = self.next_byte();
             let instruction = Op::from_u8(next_byte);
             #[cfg(debug_assertions)]
-            self.chunk.disassemble_instruction(self.ip - 1);
+            self.chunk.disassemble_instruction(self.ip - 1, &self.interner);
             match instruction {
                 Op::Return => match self.pop() {
                     Value::Obj(obj) => match obj {

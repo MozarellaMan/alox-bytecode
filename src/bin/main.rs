@@ -12,12 +12,10 @@ fn main() {
     // chunk.write(Op::Divide.u8(), 123);
     // chunk.write(Op::Negate.u8(), 123);
     // chunk.write(Op::Return.u8(), 123);
-
     // let mut vm = Vm::new(chunk);
     // if let Err(err) = vm.interpret_current_chunk() {
     //     eprintln!("{:?}", err);
     // }
-
     //chunk.disassemble("test chunk")
 
     const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -269,7 +269,7 @@ impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
     fn end_compiler(&mut self) {
         self.emit_return();
         if !self.had_error {
-            self.current_chunk.disassemble("code")
+            self.current_chunk.disassemble("code", self.interner)
         }
     }
 

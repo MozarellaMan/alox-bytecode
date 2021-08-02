@@ -1,4 +1,4 @@
-use crate::{opcodes::Op, value::Value};
+use crate::{interner::Interner, object::Object, opcodes::Op, value::Value};
 use std::usize;
 #[derive(Clone)]
 pub struct Chunk {
@@ -20,14 +20,14 @@ impl Chunk {
         self.code.push(byte);
     }
 
-    pub fn disassemble(&mut self, name: &str) {
+    pub fn disassemble(&mut self, name: &str, interner: &Interner) {
         println!("== {} ==", name);
         let mut offset = 0;
         loop {
             if offset >= self.code.len() {
                 break;
             }
-            offset = self.disassemble_instruction(offset);
+            offset = self.disassemble_instruction(offset, interner);
         }
     }
 
@@ -52,7 +52,7 @@ impl Chunk {
         self.constants.len() - 1
     }
 
-    pub fn disassemble_instruction(&self, offset: usize) -> usize {
+    pub fn disassemble_instruction(&self, offset: usize, interner: &Interner) -> usize {
         print!("{:04} ", offset);
 
         if offset > 0 && self.lines[offset] == self.lines[offset - 1] {
@@ -65,8 +65,8 @@ impl Chunk {
         let opcode = Op::from_u8(instruction);
 
         match opcode {
-            Op::Constant => self.print_constant_instruction(opcode, offset),
-            Op::ConstantLong => self.print_constant_long_instruction(opcode, offset),
+            Op::Constant => self.print_constant_instruction(opcode, offset, interner),
+            Op::ConstantLong => self.print_constant_long_instruction(opcode, offset, interner),
             _default => {
                 println!("{:?}", opcode);
                 offset + 1
@@ -74,14 +74,19 @@ impl Chunk {
         }
     }
 
-    fn print_constant_instruction(&self, op: Op, offset: usize) -> usize {
+    fn print_constant_instruction(&self, op: Op, offset: usize, interner: &Interner) -> usize {
         let constant = self.code[offset + 1];
         let value = &self.constants[constant as usize];
-        println!("{:?} \t{} '{}'", op, offset, value);
+        match value {
+            Value::Obj(obj) => match obj {
+                Object::String(str) => println!("{:?} \t{} '{:?}'", op, offset, (str.0, interner.lookup(str.0))),
+            },
+            _ => println!("{:?} \t{} '{}'", op, offset, value)
+        }
         offset + 2
     }
 
-    fn print_constant_long_instruction(&self, op: Op, offset: usize) -> usize {
+    fn print_constant_long_instruction(&self, op: Op, offset: usize, interner: &Interner) -> usize {
         let start = offset + 1;
         let end = offset + 3;
         let mut index = [0u8; 4];
@@ -92,7 +97,12 @@ impl Chunk {
         let constant = u32::from_le_bytes(index);
         let value = &self.constants[constant as usize];
 
-        println!("{:?} \t{} '{}'", op, offset, value);
+        match value {
+            Value::Obj(obj) => match obj {
+                Object::String(str) => println!("{:?} \t{} '{:?}'", op, offset, (str.0, interner.lookup(str.0))),
+            },
+            _ => println!("{:?} \t{} '{}'", op, offset, value)
+        }
         offset + 4
     }
 }
