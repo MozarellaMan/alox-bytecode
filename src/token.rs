@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Copy)]
 pub struct Token<'source> {
     pub kind: TokenKind,
     pub line: usize,
@@ -80,4 +80,10 @@ pub enum TokenKind {
 
     Eof,
     Error,
+}
+
+impl Default for TokenKind {
+    fn default() -> Self {
+        TokenKind::Eof
+    }
 }

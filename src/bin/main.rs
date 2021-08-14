@@ -19,7 +19,7 @@ fn main() {
     //chunk.disassemble("test chunk")
 
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    let matches = App::new("Alox Byrecode")
+    let matches = App::new("Alox Bytecode")
         .version(VERSION)
         .author("Ayomide B. <ayoeze@hotmail.com>")
         .about("A Lox programming language")

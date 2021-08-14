@@ -9,15 +9,20 @@ pub enum Op {
     Nil,
     True,
     False,
+    Pop,
+    GetGlobal,
+    DefineGlobal,
+    SetGlobal,
     Equal,
     Greater,
     Less,
     Add,
-    Subract,
+    Subtract,
     Multiply,
     Divide,
     Not,
     Negate,
+    Print,
 }
 
 impl Op {
@@ -34,7 +39,7 @@ impl TryFrom<u8> for Op {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value > Op::Negate as u8 {
+        if value > Op::Print as u8 {
             Err(())
         } else {
             unsafe { Ok(core::mem::transmute(value)) }

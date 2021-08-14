@@ -1,3 +1,7 @@
+use std::{collections::HashMap, fmt::Display};
+
+use ahash::AHashMap;
+
 use crate::{chunk::Chunk, interner::Interner, object::Object, opcodes::Op, value::Value};
 
 const STACK_UNDERFLOW: &str = "Stack underflow!";
@@ -12,11 +16,21 @@ macro_rules! binary_op {
             } else {
                 $self.push(a);
                 $self.push(b);
-                $self.runtime_error("Operands must be numbers.");
-                return Err(InterpreterError::RuntimeError)
+                return Err($self.runtime_error("Operands must be numbers."))
             }
         }
     };
+}
+
+macro_rules! read_string {
+    ($self:ident) => {{
+        let index = $self.next_byte();
+        let name = $self
+            .read_constant(index)
+            .as_string()
+            .expect("variable not a string!");
+        $self.interner.lookup(name.0)
+    }};
 }
 
 pub type InterpreterResult = Result<(), InterpreterError>;
@@ -25,6 +39,7 @@ pub struct Vm<'a> {
     ip: usize,
     stack: Vec<Value>,
     interner: Interner<'a>,
+    globals: AHashMap<&'a str, Value>, // TODO: Optimize global storage
 }
 
 impl<'vm> Vm<'vm> {
@@ -34,6 +49,7 @@ impl<'vm> Vm<'vm> {
             ip: 0,
             stack: Vec::new(),
             interner,
+            globals: AHashMap::new(),
         }
     }
 
@@ -47,18 +63,15 @@ impl<'vm> Vm<'vm> {
                 break;
             }
             #[cfg(debug_assertions)]
-            println!("{:?}", &self.stack);
+            self.dbg_show_stack();
             let next_byte = self.next_byte();
             let instruction = Op::from_u8(next_byte);
             #[cfg(debug_assertions)]
-            self.chunk.disassemble_instruction(self.ip - 1, &self.interner);
+            self.dbg_dissamble_instructions();
+            #[cfg(debug_assertions)]
+            self.dbg_show_globals();
             match instruction {
-                Op::Return => match self.pop() {
-                    Value::Obj(obj) => match obj {
-                        Object::String(idx) => println!("{}", self.interner.lookup(idx.0)),
-                    },
-                    _other => println!("{}", _other),
-                },
+                Op::Return => return Ok(()),
                 Op::Constant | Op::ConstantLong => {
                     let index = self.next_byte();
                     let constant = self.read_constant(index);
@@ -70,8 +83,7 @@ impl<'vm> Vm<'vm> {
                         self.push(Value::Number(-n));
                     } else {
                         self.push(val);
-                        self.runtime_error("Operand must be a number.");
-                        return Err(InterpreterError::RuntimeError);
+                        return Err(self.runtime_error("Operand must be a number."));
                     }
                 }
                 Op::Add => {
@@ -91,20 +103,18 @@ impl<'vm> Vm<'vm> {
                             } else {
                                 self.push(Value::Obj(a.clone()));
                                 self.push(Value::Obj(b.clone()));
-                                self.runtime_error("Operands must be two strings.");
-                                return Err(InterpreterError::RuntimeError);
+                                return Err(self.runtime_error("Operands must be two strings."));
                             }
                         }
                         (Value::Number(b), Value::Number(a)) => self.push(Value::Number(a + b)),
                         _ => {
                             self.push(a);
                             self.push(b);
-                            self.runtime_error("Operands must be two numbers.");
-                            return Err(InterpreterError::RuntimeError);
+                            return Err(self.runtime_error("Operands must be two numbers."));
                         }
                     }
                 }
-                Op::Subract => binary_op!(self, -, Number),
+                Op::Subtract => binary_op!(self, -, Number),
                 Op::Multiply => binary_op!(self, *, Number),
                 Op::Divide => binary_op!(self, /, Number),
                 Op::Nil => self.push(Value::Nil),
@@ -121,6 +131,41 @@ impl<'vm> Vm<'vm> {
                 }
                 Op::Greater => binary_op!(self, >, Bool),
                 Op::Less => binary_op!(self, <, Bool),
+                Op::Print => {
+                    let val = self.pop();
+                    self.print_val(val)
+                }
+                Op::Pop => {
+                    self.pop();
+                }
+                Op::DefineGlobal => {
+                    let name = read_string!(self);
+                    let value = self.pop();
+                    self.globals.insert(name, value);
+                }
+                Op::GetGlobal => {
+                    let name = read_string!(self);
+                    let val = if let Some(val) = self.globals.get(name) {
+                        val.clone()
+                    } else {
+                        return Err(InterpreterError::RuntimeError(format!(
+                            "Undefined variable '{}'",
+                            name
+                        )));
+                    };
+                    self.push(val);
+                }
+                Op::SetGlobal => {
+                    let name = read_string!(self);
+                    if self.globals.contains_key(name) {
+                        self.globals.insert(name, self.peek().clone())
+                    } else {
+                        return Err(InterpreterError::RuntimeError(format!(
+                            "Undefined variable '{}'",
+                            name
+                        )));
+                    };
+                }
             }
         }
         Ok(())
@@ -160,12 +205,13 @@ impl<'vm> Vm<'vm> {
         self.chunk.constants[index as usize].clone()
     }
 
-    fn runtime_error(&self, message: &str) {
-        eprintln!("{}", message);
+    fn runtime_error(&self, message: &str) -> InterpreterError {
         let line = self.chunk.lines[self.ip - 1];
-        eprintln!("[line {}] in script", line)
+        let place = format!("[line {}] in script", line);
+        InterpreterError::RuntimeError(format!("{}\n{}", place, message))
     }
 
+    #[inline]
     fn is_falsey(val: Value) -> bool {
         match val {
             Value::Nil => true,
@@ -173,12 +219,51 @@ impl<'vm> Vm<'vm> {
             _ => false,
         }
     }
+
+    #[inline]
+    fn print_val(&self, val: Value) {
+        match val {
+            Value::Obj(obj) => match obj {
+                Object::String(idx) => println!("{}", self.interner.lookup(idx.0)),
+            },
+            _other => println!("{}", _other),
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn dbg_show_stack(&self) {
+        println!("Stack: {:?}", &self.stack);
+    }
+
+    #[cfg(debug_assertions)]
+    fn dbg_dissamble_instructions(&self) {
+        self.chunk
+            .disassemble_instruction(self.ip - 1, &self.interner);
+    }
+
+    #[cfg(debug_assertions)]
+    fn dbg_show_globals(&self) {
+        if !self.globals.is_empty() {
+            println!("Globals: {:?}", &self.globals);
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum InterpreterError {
     CompileError,
-    RuntimeError,
+    RuntimeError(String),
     NoInstructions,
     UnknownInstruction,
+}
+
+impl Display for InterpreterError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InterpreterError::CompileError => write!(f, "Compilation error!"),
+            InterpreterError::RuntimeError(err) => write!(f, "Runtime error: {}", err),
+            InterpreterError::NoInstructions => write!(f, "No instructions!"),
+            InterpreterError::UnknownInstruction => write!(f, "Unkown instruction!"),
+        }
+    }
 }

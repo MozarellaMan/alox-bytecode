@@ -66,6 +66,9 @@ impl Chunk {
 
         match opcode {
             Op::Constant => self.print_constant_instruction(opcode, offset, interner),
+            Op::DefineGlobal => self.print_constant_instruction(opcode, offset, interner),
+            Op::GetGlobal => self.print_constant_instruction(opcode, offset, interner),
+            Op::SetGlobal => self.print_constant_instruction(opcode, offset, interner),
             Op::ConstantLong => self.print_constant_long_instruction(opcode, offset, interner),
             _default => {
                 println!("{:?}", opcode);
@@ -79,9 +82,14 @@ impl Chunk {
         let value = &self.constants[constant as usize];
         match value {
             Value::Obj(obj) => match obj {
-                Object::String(str) => println!("{:?} \t{} '{:?}'", op, offset, (str.0, interner.lookup(str.0))),
+                Object::String(str) => println!(
+                    "{:?}\t{} '{:?}'",
+                    op,
+                    offset,
+                    (str.0, interner.lookup(str.0))
+                ),
             },
-            _ => println!("{:?} \t{} '{}'", op, offset, value)
+            _ => println!("{:?} \t{} '{}'", op, offset, value),
         }
         offset + 2
     }
@@ -99,9 +107,14 @@ impl Chunk {
 
         match value {
             Value::Obj(obj) => match obj {
-                Object::String(str) => println!("{:?} \t{} '{:?}'", op, offset, (str.0, interner.lookup(str.0))),
+                Object::String(str) => println!(
+                    "{:?} \t{} '{:?}'",
+                    op,
+                    offset,
+                    (str.0, interner.lookup(str.0))
+                ),
             },
-            _ => println!("{:?} \t{} '{}'", op, offset, value)
+            _ => println!("{:?} \t{} '{}'", op, offset, value),
         }
         offset + 4
     }

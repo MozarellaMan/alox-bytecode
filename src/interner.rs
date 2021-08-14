@@ -8,7 +8,7 @@ pub struct Interner<'vm> {
     arena: &'vm Arena<u8>,
 }
 
-impl Interner<'_> {
+impl<'vm> Interner<'vm> {
     pub fn new(arena: &Arena<u8>) -> Interner {
         Interner {
             map: AHashMap::new(),
@@ -40,7 +40,7 @@ impl Interner<'_> {
         *self.map.get(name).expect("Interned string does not exist!")
     }
 
-    pub fn lookup(&self, idx: u32) -> &str {
+    pub fn lookup(&self, idx: u32) -> &'vm str {
         self.vec[idx as usize]
     }
 }

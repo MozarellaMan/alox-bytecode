@@ -1,6 +1,6 @@
 use chunk::Chunk;
-use compiler::Parser;
 use interner::Interner;
+use parser::Parser;
 use scanner::Scanner;
 use typed_arena::Arena;
 use vm::Vm;
@@ -10,6 +10,7 @@ pub mod compiler;
 pub mod interner;
 pub mod object;
 pub mod opcodes;
+pub mod parser;
 pub mod repl;
 pub mod scanner;
 pub mod token;
@@ -31,7 +32,7 @@ pub fn run_script(source: &str) {
         let mut vm = Vm::new(chunk, interner);
 
         if let Err(err) = vm.run() {
-            eprintln!("{:?}", err)
+            eprintln!("{}", err)
         };
     }
 }

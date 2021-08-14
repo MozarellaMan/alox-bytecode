@@ -40,6 +40,15 @@ impl Value {
             None
         }
     }
+
+    pub fn as_string(&self) -> Option<AloxString> {
+        if let Self::Obj(obj) = &self {
+            if let Object::String(string) = *obj {
+                return Some(string);
+            }
+        }
+        None
+    }
 }
 
 impl Display for Value {
