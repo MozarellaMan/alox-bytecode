@@ -1,17 +1,17 @@
 use crate::token::Token;
 
-const U8_COUNT: usize = (u8::MAX as usize) + 1;
+pub const U8_COUNT: usize = (u8::MAX as usize) + 1;
 
 pub struct Compiler<'a> {
-    locals: [Local<'a>; U8_COUNT],
-    count: usize,
-    scope_depth: usize,
+    pub locals: [Local<'a>; U8_COUNT],
+    pub count: usize,
+    pub scope_depth: i32,
 }
 
-#[derive(Clone, Default, Copy)]
+#[derive(Clone, Default, Copy, Debug)]
 pub struct Local<'a> {
-    name: Token<'a>,
-    depth: usize,
+    pub name: Token<'a>,
+    pub depth: i32,
 }
 
 impl Compiler<'_> {
@@ -22,5 +22,15 @@ impl Compiler<'_> {
             scope_depth: 0,
             locals,
         }
+    }
+
+    #[inline]
+    pub fn increase_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    #[inline]
+    pub fn decrease_scope(&mut self) {
+        self.scope_depth -= 1;
     }
 }

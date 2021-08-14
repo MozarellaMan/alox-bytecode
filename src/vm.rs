@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::fmt::Display;
 
 use ahash::AHashMap;
 
@@ -165,6 +165,15 @@ impl<'vm> Vm<'vm> {
                             name
                         )));
                     };
+                }
+                Op::GetLocal => {
+                    let slot = self.next_byte();
+                    let local = self.stack[slot as usize].clone();
+                    self.push(local)
+                }
+                Op::SetLocal => {
+                    let slot = self.next_byte();
+                    self.stack[slot as usize] = self.peek().clone();
                 }
             }
         }

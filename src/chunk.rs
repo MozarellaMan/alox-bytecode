@@ -69,12 +69,20 @@ impl Chunk {
             Op::DefineGlobal => self.print_constant_instruction(opcode, offset, interner),
             Op::GetGlobal => self.print_constant_instruction(opcode, offset, interner),
             Op::SetGlobal => self.print_constant_instruction(opcode, offset, interner),
+            Op::SetLocal => self.print_byte_instruction(opcode, offset),
+            Op::GetLocal => self.print_byte_instruction(opcode, offset),
             Op::ConstantLong => self.print_constant_long_instruction(opcode, offset, interner),
             _default => {
                 println!("{:?}", opcode);
                 offset + 1
             }
         }
+    }
+
+    fn print_byte_instruction(&self, op: Op, offset: usize) -> usize {
+        let slot = self.code[offset + 1];
+        println!("{:?}\t{} Slot {}", op, offset, slot);
+        offset + 2
     }
 
     fn print_constant_instruction(&self, op: Op, offset: usize, interner: &Interner) -> usize {

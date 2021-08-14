@@ -2,7 +2,7 @@ use std::{convert::TryInto, u8};
 
 use crate::{
     chunk::Chunk,
-    compiler::Compiler,
+    compiler::{Compiler, Local, U8_COUNT},
     interner::Interner,
     opcodes::Op,
     scanner::Scanner,
@@ -124,9 +124,35 @@ impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
     fn statement(&mut self) {
         if self.match_current(TokenKind::Print) {
             self.print_statement();
+        } else if self.match_current(TokenKind::LeftBrace) {
+            self.begin_scope();
+            self.block();
+            self.end_scope();
         } else {
             self.expression_statement();
         }
+    }
+
+    fn begin_scope(&mut self) {
+        self.current_compiler.increase_scope();
+    }
+
+    fn end_scope(&mut self) {
+        self.current_compiler.decrease_scope();
+        while self.current_compiler.count > 0
+            && self.current_compiler.locals[self.current_compiler.count - 1].depth
+                > self.current_compiler.scope_depth
+        {
+            self.emit_byte(Op::Pop.u8());
+            self.current_compiler.count -= 1;
+        }
+    }
+
+    fn block(&mut self) {
+        while !self.check(TokenKind::RightBrace) && !self.check(TokenKind::Eof) {
+            self.declaration();
+        }
+        self.consume(TokenKind::RightBrace, "Expected '}' after block.");
     }
 
     fn expression_statement(&mut self) {
@@ -192,7 +218,7 @@ impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
         if let Some(rule) = prefix_rule {
             rule(self, can_assign);
         } else {
-            self.error("Expected expression.");
+            self.error_mut("Expected expression.");
             return;
         }
 
@@ -205,13 +231,17 @@ impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
         }
 
         if can_assign && self.match_current(TokenKind::Equal) {
-            self.error("Invalid assignment target.")
+            self.error_mut("Invalid assignment target.")
         }
     }
 
     fn parse_variable(&mut self, error_msg: &str) -> u8 {
         self.consume(TokenKind::Identifier, error_msg);
         let name = self.previous.expect("No previous token!").lexeme;
+        self.declare_variable();
+        if self.current_compiler.scope_depth > 0 {
+            return 0;
+        }
         self.identifier_constant(name)
     }
 
@@ -220,8 +250,50 @@ impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
         self.make_constant(Value::from_str_index(idx))
     }
 
+    fn declare_variable(&mut self) {
+        if self.current_compiler.scope_depth == 0 {
+            return;
+        }
+
+        let name = self.previous.expect("No previous token!");
+
+        for local in self.current_compiler.locals.iter().rev() {
+            if local.depth != -1 && local.depth < self.current_compiler.scope_depth {
+                break;
+            }
+
+            if local.name.lexeme == name.lexeme {
+                let msg = format!("Already a variable with the name {}", name.lexeme);
+                self.had_error = true;
+                self.error(&msg);
+            }
+        }
+
+        self.add_local(name)
+    }
+
+    fn add_local(&mut self, name: Token<'source>) {
+        if self.current_compiler.count == U8_COUNT {
+            self.error_mut("Too many local variables in function!");
+            return;
+        }
+        let local = Local { name, depth: -1 };
+        let count = self.current_compiler.count;
+        self.current_compiler.locals[count] = local;
+        self.current_compiler.count += 1;
+    }
+
     fn define_variable(&mut self, global: u8) {
+        if self.current_compiler.scope_depth > 0 {
+            self.mark_initialized();
+            return;
+        }
         self.emit_bytes(Op::DefineGlobal.u8(), global)
+    }
+
+    fn mark_initialized(&mut self) {
+        self.current_compiler.locals[self.current_compiler.count - 1].depth =
+            self.current_compiler.scope_depth;
     }
 
     fn find_rule(&mut self, op_kind: TokenKind) -> ParseRule {
@@ -313,13 +385,40 @@ impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
     }
 
     fn named_variable(&mut self, name: &str, can_assign: bool) {
-        let arg = self.identifier_constant(name);
+        let set_op;
+        let get_op;
+        let mut arg = self.resolve_local(name);
+        if arg != -1 {
+            set_op = Op::SetLocal.u8();
+            get_op = Op::GetLocal.u8();
+        } else {
+            arg = self.identifier_constant(name) as i32;
+            set_op = Op::SetGlobal.u8();
+            get_op = Op::GetGlobal.u8();
+        }
         if can_assign && self.match_current(TokenKind::Equal) {
             self.expression();
-            self.emit_bytes(Op::SetGlobal.u8(), arg);
+            self.emit_bytes(set_op, arg as u8);
         } else {
-            self.emit_bytes(Op::GetGlobal.u8(), arg);
+            self.emit_bytes(get_op, arg as u8);
         }
+    }
+
+    fn resolve_local(&mut self, name: &str) -> i32 {
+        for (i, local) in self.current_compiler.locals.iter().enumerate().rev() {
+            if name == local.name.lexeme {
+                if local.depth == -1 {
+                    self.had_error = true;
+                    let msg = format!(
+                        "Can't read local variable '{}' in its own initializer!",
+                        &name
+                    );
+                    self.error(&msg);
+                }
+                return i as i32;
+            }
+        }
+        -1
     }
 
     fn literal(&mut self, _can_assign: bool) {
@@ -434,16 +533,22 @@ impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
         }
     }
 
-    fn error(&mut self, message: &str) {
-        self.error_at(self.previous, message)
+    /// Should set `self.had_error` to true before using this
+    fn error(&self, message: &str) {
+        self.error_at(self.previous, message);
+    }
+
+    fn error_mut(&mut self, message: &str) {
+        self.had_error = true;
+        self.error_at(self.previous, message);
     }
 
     fn error_at_current(&mut self, message: &str) {
+        self.had_error = true;
         self.error_at(self.current, message);
     }
 
-    fn error_at(&mut self, token: Option<Token>, message: &str) {
-        self.had_error = true;
+    fn error_at(&self, token: Option<Token>, message: &str) {
         if self.panic_mode {
             return;
         }
@@ -457,7 +562,7 @@ impl<'source, 'chunk, 'interner> Parser<'source, 'chunk, 'interner> {
             if !message.is_empty() {
                 eprintln!(": {}", message);
             } else {
-                eprint!("\n");
+                eprintln!();
             }
         } else {
             eprintln!("Parser error.");
